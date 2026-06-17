@@ -52,11 +52,16 @@ export default function App() {
     if (data) setProducts(data);
   };
 
+  // FIXED ENGINE: Synchronizes all states together so cashier cards update live on checkout
   const refreshSalesAndUtang = async () => {
     const { data: sData } = await supabase.from('sales').select('*').order('id', { ascending: false });
     if (sData) setSalesLog(sData);
+    
     const { data: uData } = await supabase.from('utang').select('*').order('id', { ascending: false });
     if (uData) setUtangLog(uData);
+
+    const { data: pData } = await supabase.from('products').select('*').order('name', { ascending: true });
+    if (pData) setProducts(pData);
   };
 
   if (loading) {
