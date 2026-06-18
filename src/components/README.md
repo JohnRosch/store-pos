@@ -120,3 +120,5 @@ This system is completely ready for real-world deployment so that you can view y
 ## 🔒 Security Notice
 * This system operates using a localized client initialization bridge pattern. 
 * To scale access securely for corporate networks or non-owner multi-staff shifts, row-level access tokens (RLS) can be turned on in Supabase alongside a secure login interface screen.
+
+
