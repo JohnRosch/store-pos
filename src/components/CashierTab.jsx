@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient';
 export default function CashierTab({ products, cart, setCart, salesLog, setSalesLog, utangLog, setUtangLog, searchQuery, setSearchQuery, cashReceived, setCashReceived, customerName, setCustomerName, isUtangTransaction, setIsUtangTransaction }) {
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [animate, setAnimate] = useState(false);
+  
+  // Active folder view tracker
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   const triggerModal = (title, message, type = 'info') => { setModal({ isOpen: true, title, message, type }); };
   
@@ -48,7 +51,17 @@ export default function CashierTab({ products, cart, setCart, salesLog, setSales
   const billString = "5,10,20,50,100,500,1000";
   const bills = billString.split(',').map(Number);
 
-    const handleCheckout = async (e) => {
+  // FIXED: Your precise requested product category array list
+  const categoriesList = ['All', 'Rice', 'Egg', 'Grocery', 'Non-Food', 'Etc'];
+
+  // FILTER CORE: Evaluates text query strings against exact category allocations
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || (p.category && p.category.toLowerCase() === selectedCategory.toLowerCase());
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleCheckout = async (e) => {
     e.preventDefault();
     if (cart.length === 0) return triggerModal('Empty Cart', 'Please add items before checking out.', 'warning');
     if (isUtangTransaction && !customerName.trim()) return triggerModal('Missing Info', 'Please enter customer name.', 'warning');
@@ -82,19 +95,17 @@ export default function CashierTab({ products, cart, setCart, salesLog, setSales
       }
 
       setCart([]); setCashReceived(''); setCustomerName(''); setIsUtangTransaction(false);
-      
       if (typeof setSalesLog === 'function') setSalesLog();
-      
       triggerModal('Success!', 'Transaction uploaded and cloud inventory levels updated permanently.', 'success');
-
     } catch (error) {
       console.error(error);
       triggerModal('Cloud Sync Error', 'Could not sync database records.', 'error');
     }
   };
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+    return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative items-start">
+      {/* MODAL LAYER POPUPS */}
       {modal.isOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md transition-opacity duration-200 ease-out ${animate ? 'opacity-100' : 'opacity-0'}`}>
           <div className={`bg-white/90 backdrop-blur-xl border border-white/40 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center transition-all duration-200 ease-out transform ${animate ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
@@ -106,23 +117,43 @@ export default function CashierTab({ products, cart, setCart, salesLog, setSales
         </div>
       )}
 
-      <div className="lg:col-span-2 bg-white/40 backdrop-blur-md border border-white/30 rounded-2xl p-5 shadow-lg">
-        <input type="text" placeholder="🔍 Search item name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-gray-200 bg-white/60 pl-4 py-2.5 rounded-xl outline-none mb-4" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map(p => (
-            <button key={p.id} onClick={() => addToCart(p)} className="p-4 border border-gray-200/50 rounded-xl text-left flex flex-col justify-between hover:border-blue-500 hover:shadow-md transition bg-white/70 backdrop-blur-sm relative overflow-hidden group">
-              {p.stock <= p.threshold && p.stock > 0 && <span className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-md font-bold animate-pulse">LOW</span>}
-              {p.stock === 0 && <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex items-center justify-center font-bold text-red-500">OUT OF STOCK</div>}
-              <span className="font-semibold text-gray-800 text-sm line-clamp-2">{p.name}</span>
-              <div className="mt-4 flex justify-between items-end w-full">
-                <span className="text-blue-600 font-extrabold text-base">₱{p.price.toFixed(2)}</span>
-                <span className="text-xs text-gray-400 font-medium">Qty: {p.stock}</span>
-              </div>
+      {/* LEFT: PRODUCTS SIDE SHELF */}
+      <div className="lg:col-span-2 bg-white/40 backdrop-blur-md border border-white/30 rounded-2xl p-5 shadow-lg flex flex-col">
+        <input type="text" placeholder="🔍 Search item name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-gray-200 bg-white/60 pl-4 py-2.5 rounded-xl outline-none mb-3" />
+        
+        {/* PREMIUM HORIZONTAL CATEGORY NAVIGATION FILTER BAR WITH CUSTOM TARGETED EMOJIS */}
+        <div className="flex items-center space-x-1 overflow-x-auto pb-3 mb-2 scrollbar-none bg-gray-100/40 p-1 rounded-xl border border-gray-200/40">
+          {categoriesList.map(cat => (
+            <button key={cat} type="button" onClick={() => setSelectedCategory(cat)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-150 active:scale-95 shadow-2xs ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'bg-white/80 text-gray-600 hover:text-gray-900 hover:bg-white'}`}>
+              {cat === 'All' ? '🌐 All Items' : cat === 'Rice' ? '🍚 Rice' : cat === 'Egg' ? '🥚 Egg' : cat === 'Grocery' ? '🥫 Grocery' : cat === 'Non-Food' ? '🧼 Non-Food' : '📦 Etc'}
             </button>
           ))}
         </div>
+
+        {/* 4-COLUMN COMPACT RESPONSIVE TILES GRID */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 items-start content-start">
+          {filteredProducts.map(p => (
+            <button key={p.id} onClick={() => addToCart(p)} className="p-3 w-full h-[95px] border border-gray-200/50 rounded-xl text-left flex flex-col justify-between hover:border-blue-500 hover:shadow-sm transition bg-white/70 backdrop-blur-sm relative overflow-hidden group">
+              {p.stock <= p.threshold && p.stock > 0 && <span className="absolute top-1 right-1 bg-amber-500 text-white text-[8px] px-1 rounded font-bold animate-pulse">LOW</span>}
+              {p.stock === 0 && <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex items-center justify-center font-bold text-red-500 text-xs">OUT</div>}
+              
+              <div className="w-full">
+                <span className="font-bold text-gray-800 text-xs line-clamp-2 leading-tight block">{p.name}</span>
+              </div>
+              
+              <div className="w-full flex justify-between items-baseline mt-auto border-t border-gray-100/60 pt-1">
+                <span className="text-blue-600 font-black text-xs">₱{p.price.toFixed(0)}</span>
+                <span className="text-[10px] text-gray-400 font-medium">Qty: {p.stock}</span>
+              </div>
+            </button>
+          ))}
+          {filteredProducts.length === 0 && (
+            <div className="col-span-full text-center text-gray-400 py-12 text-xs font-semibold">No products inside this category.</div>
+          )}
+        </div>
       </div>
 
+      {/* RIGHT: ACCOUNTING/SUMMARY BILLING BOX */}
       <div className="bg-white/40 backdrop-blur-md border border-white/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between h-fit">
         <div>
           <div className="flex justify-between items-center border-b pb-3 mb-4"><h2 className="text-base font-bold text-gray-800">Current Order</h2><button type="button" onClick={() => setCart([])} className="text-xs text-red-500 font-semibold">Clear All</button></div>
@@ -142,6 +173,7 @@ export default function CashierTab({ products, cart, setCart, salesLog, setSales
             </div>
           )}
         </div>
+        
         <div className="mt-6 pt-4 border-t border-dashed border-gray-200">
           <div className="flex justify-between items-center mb-4"><span className="text-sm font-semibold text-gray-500">Total Due:</span><span className="text-2xl font-black text-blue-600">₱{cartTotal.toFixed(2)}</span></div>
           <form onSubmit={handleCheckout} className="space-y-4">
@@ -154,11 +186,10 @@ export default function CashierTab({ products, cart, setCart, salesLog, setSales
                 <input type="number" min="0" placeholder="₱ 0.00" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} className="w-full border border-gray-200 bg-white/80 p-2.5 rounded-xl text-xl font-black text-green-700 text-center outline-none" />
                 <div className="grid grid-cols-4 gap-1">{bills.map(amt => (<button key={amt} type="button" onClick={() => setCashReceived(((parseFloat(cashReceived) || 0) + amt).toString())} className="bg-white hover:bg-blue-50 border border-gray-200 text-gray-700 font-bold py-1 rounded-lg text-xs shadow-xs active:scale-95 transition-all">+{amt}</button>))}</div>
                 
-                {/* RE-STYLED: UPDATED EXTRA-CONTRAST AMBER DISPLAY COMPONENT BOX */}
                 {cashReceived && (
                   <div className={`text-center p-4 rounded-xl mt-3 border-2 shadow-inner tracking-wide transition-all duration-300 ${
                     changeDue >= 0 
-                      ? 'bg-amber-400 text-slate-900 border-amber-500 text-xl font-black shadow-amber-500/20 animate-pulse' 
+                      ? 'bg-amber-400 text-slate-900 border-amber-500 text-xl font-black shadow-amber-500/20' 
                       : 'bg-red-600 text-white border-red-700 text-sm font-bold'
                   }`}>
                     {changeDue >= 0 

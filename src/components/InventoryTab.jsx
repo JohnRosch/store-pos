@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import StockTable from './StockTable'; // Imports our lightweight table file
 
 export default function InventoryTab({ products, setProducts }) {
-  const [newProd, setNewProd] = useState({ name: '', cost: '', price: '', stock: '', threshold: '5' });
+  const [newProd, setNewProd] = useState({ name: '', cost: '', price: '', stock: '', threshold: '5', category: 'Grocery' });
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null, name: '' });
-  
-  // NEW STATE: Built-in Restock Modal tracking layers
   const [promptModal, setPromptModal] = useState({ isOpen: false, id: null, name: '', value: '' });
-  
   const [animate, setAnimate] = useState({ standard: false, confirm: false, prompt: false });
+
+  // LIVE CALCULATOR LOGIC
+  const costNum = parseFloat(newProd.cost) || 0;
+  const priceNum = parseFloat(newProd.price) || 0;
+  const pesosProfit = priceNum - costNum;
+  const marginPercentage = priceNum > 0 ? (pesosProfit / priceNum) * 100 : 0;
 
   useEffect(() => {
     if (modal.isOpen) setTimeout(() => setAnimate(prev => ({ ...prev, standard: true })), 10);
@@ -35,13 +39,10 @@ export default function InventoryTab({ products, setProducts }) {
     e.preventDefault();
     try {
       await supabase.from('products').insert([{
-        name: newProd.name,
-        cost: parseFloat(newProd.cost) || 0,
-        price: parseFloat(newProd.price) || 0,
-        stock: parseInt(newProd.stock) || 0,
-        threshold: parseInt(newProd.threshold) || 5
+        name: newProd.name, cost: parseFloat(newProd.cost) || 0, price: parseFloat(newProd.price) || 0,
+        stock: parseInt(newProd.stock) || 0, threshold: parseInt(newProd.threshold) || 5, category: newProd.category 
       }]);
-      setNewProd({ name: '', cost: '', price: '', stock: '', threshold: '5' });
+      setNewProd({ name: '', cost: '', price: '', stock: '', threshold: '5', category: 'Grocery' });
       if (typeof setProducts === 'function') setProducts(); 
       triggerModal('Product Registered', 'Item added to your cloud warehouse inventory shelf.', 'success');
     } catch (err) { triggerModal('Cloud Failure', 'Could not sync database line items.', 'error'); }
@@ -56,19 +57,15 @@ export default function InventoryTab({ products, setProducts }) {
       if (typeof setProducts === 'function') setProducts(); 
       closeConfirm();
       setTimeout(() => triggerModal('Item Removed', 'The item has been deleted from your cloud database.', 'info'), 250);
-    } catch (err) { closeConfirm(); setTimeout(() => triggerModal('Cloud Error', 'Could not process deletion request.', 'error'), 250); }
+    } catch (err) { closeConfirm(); triggerModal('Cloud Error', 'Could not process deletion request.', 'error'); }
   };
 
-  // NEW ACTIONS: Opens Restock Input glass overlay modal
-  const askRestock = (id, name) => {
-    setPromptModal({ isOpen: true, id, name, value: '' });
-  };
+  const askRestock = (id, name) => { setPromptModal({ isOpen: true, id, name, value: '' }); };
 
   const executeRestock = async (e) => {
     e.preventDefault();
     const parsed = parseInt(promptModal.value);
     if (isNaN(parsed) || parsed <= 0) return triggerModal('Invalid Amount', 'Please input a number greater than 0.', 'warning');
-
     try {
       const targetProd = products.find(p => p.id === promptModal.id);
       if (targetProd) {
@@ -78,12 +75,11 @@ export default function InventoryTab({ products, setProducts }) {
         closePrompt();
         setTimeout(() => triggerModal('Stock Updated', `Successfully added ${parsed} pieces to inventory.`, 'success'), 250);
       }
-    } catch (err) { closePrompt(); setTimeout(() => triggerModal('Sync Failed', 'Could not connect to cloud database.', 'error'), 250); }
+    } catch (err) { closePrompt(); triggerModal('Sync Failed', 'Could not connect to cloud database.', 'error'); }
   };
 
     return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
-      
       {/* 1. STATUS NOTIFICATION MODAL */}
       {modal.isOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md transition-opacity duration-200 ease-out ${animate.standard ? 'opacity-100' : 'opacity-0'}`}>
@@ -105,13 +101,13 @@ export default function InventoryTab({ products, setProducts }) {
             <p className="text-sm text-gray-600 mb-6">Are you sure you want to delete <span className="font-bold text-gray-900">"{confirmModal.name}"</span> permanently?</p>
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={closeConfirm} className="bg-gray-100 py-2 rounded-xl">Cancel</button>
-              <button type="button" onClick={executeDelete} className="bg-red-500 text-white py-2 rounded-xl shadow">Delete</button>
+              <button type="button" onClick={executeDelete} className="bg-red-50 text-white py-2 rounded-xl shadow">Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. NEW: CUSTOM RESTOCK INPUT PROMPT GLASS MODAL */}
+      {/* 3. PROMPT RESTOCK GLASS MODAL */}
       {promptModal.isOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md transition-opacity duration-200 ease-out ${animate.prompt ? 'opacity-100' : 'opacity-0'}`}>
           <form onSubmit={executeRestock} className={`bg-white/90 backdrop-blur-xl border border-white/40 shadow-2xl rounded-2xl max-w-sm w-full p-6 text-center transition-all duration-200 ease-out transform ${animate.prompt ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
@@ -127,56 +123,53 @@ export default function InventoryTab({ products, setProducts }) {
         </div>
       )}
 
-      {/* REGISTRATION FORM */}
+      {/* REGISTRATION FORM WITH EMBEDDED PROFIT MARGIN CHIP COMPONENT */}
       <div className="bg-white/40 backdrop-blur-md border border-white/30 rounded-2xl p-5 shadow-lg h-fit">
         <h2 className="text-lg font-bold text-gray-800 border-b pb-2 mb-4">➕ Register Product</h2>
         <form onSubmit={handleAdd} className="space-y-3">
-          <input type="text" required placeholder="Product Name" value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none" />
-          <div className="grid grid-cols-2 gap-2">
-            <input type="number" required min="0" step="0.01" placeholder="Capital Cost" value={newProd.cost} onChange={(e) => setNewProd({ ...newProd, cost: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none" />
-            <input type="number" required min="0" step="0.01" placeholder="Selling Price" value={newProd.price} onChange={(e) => setNewProd({ ...newProd, price: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none" />
+          <input type="text" required placeholder="Product Name" value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none focus:bg-white transition-all" />
+          
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Product Category</label>
+            <select value={newProd.category} onChange={(e) => setNewProd({ ...newProd, category: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none cursor-pointer focus:bg-white transition-all font-semibold text-gray-700">
+              <option value="Rice">🍚 Rice</option>
+              <option value="Egg">🥚 Egg</option>
+              <option value="Grocery">🥫 Grocery</option>
+              <option value="Non-Food">🧼 Non-Food</option>
+              <option value="Etc">📦 Etc</option>
+            </select>
           </div>
+
           <div className="grid grid-cols-2 gap-2">
-            <input type="number" required min="0" placeholder="Initial Stock" value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none" />
-            <input type="number" min="0" placeholder="Alert Threshold" value={newProd.threshold} onChange={(e) => setNewProd({ ...newProd, threshold: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none" />
+            <input type="number" required min="0" step="0.01" placeholder="Capital Cost" value={newProd.cost} onChange={(e) => setNewProd({ ...newProd, cost: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none focus:bg-white transition-all" />
+            <input type="number" required min="0" step="0.01" placeholder="Selling Price" value={newProd.price} onChange={(e) => setNewProd({ ...newProd, price: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none focus:bg-white transition-all" />
           </div>
-          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm shadow">Save to Cloud Inventory</button>
+
+          {/* DYNAMIC PROFIT MARGIN CHIP COMPONENT */}
+          {costNum > 0 && priceNum > 0 && (
+            <div className={`p-2.5 rounded-xl border text-center text-xs font-bold transition-all duration-300 shadow-2xs ${
+              pesosProfit > 0 ? (marginPercentage >= 15 ? 'bg-green-50 text-green-700 border-green-200/60' : 'bg-amber-50 text-amber-700 border-amber-200/60') : 'bg-red-50 text-red-600 border-red-200/60'
+            }`}>
+              {pesosProfit > 0 ? (
+                <p>📈 Profit: <span className="font-extrabold">+₱{pesosProfit.toFixed(2)}</span> ({marginPercentage.toFixed(1)}% Margin)</p>
+              ) : pesosProfit === 0 ? (
+                <p>⚖️ Break-Even: No Profit / No Loss</p>
+              ) : (
+                <p>🚨 Loss Warning: Selling below capital cost by ₱{Math.abs(pesosProfit).toFixed(2)}!</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <input type="number" required min="0" placeholder="Initial Stock" value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none focus:bg-white transition-all" />
+            <input type="number" min="0" placeholder="Alert Threshold" value={newProd.threshold} onChange={(e) => setNewProd({ ...newProd, threshold: e.target.value })} className="w-full border border-gray-200 bg-white/60 rounded-xl p-2.5 text-sm outline-none focus:bg-white transition-all" />
+          </div>
+          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm shadow active:scale-[0.99] transition-all">Save to Cloud Inventory</button>
         </form>
       </div>
 
-      {/* STOCK LEDGER DIRECTORY */}
-      <div className="lg:col-span-2 bg-white/40 backdrop-blur-md border border-white/30 rounded-2xl p-5 shadow-lg">
-        <h2 className="text-lg font-bold text-gray-800 border-b pb-2 mb-4">📦 Stock Ledger</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-gray-500 border-b"><th className="p-2">Item Name</th><th className="p-2">Cost</th><th className="p-2">Price</th><th className="p-2 text-center">Stock</th><th className="p-2 text-right">Actions</th></tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {products.length === 0 ? (
-                <tr><td colSpan="5" className="p-4 text-center text-gray-400">No products inside cloud. Add one on the left!</td></tr>
-              ) : (
-                products.map(p => (
-                  <tr key={p.id} className="hover:bg-white/40 transition-colors">
-                    <td className="p-2 font-semibold text-gray-800">
-                      <div>{p.name}</div>
-                      {p.stock <= p.threshold && <span className="text-[9px] text-amber-700 bg-amber-100 px-1 rounded font-bold">⚠️ REORDER</span>}
-                    </td>
-                    <td className="p-2 text-gray-600">₱{p.cost.toFixed(2)}</td>
-                    <td className="p-2 font-bold text-blue-600">₱{p.price.toFixed(2)}</td>
-                    <td className="p-2 text-center font-bold text-gray-800">{p.stock}</td>
-                    <td className="p-2 text-right space-x-1 whitespace-nowrap">
-                      {/* RE-ADDED RESTOCK BUTTON */}
-                      <button type="button" onClick={() => askRestock(p.id, p.name)} className="bg-blue-50 border border-blue-200 text-blue-600 px-2 py-1 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all">+ Restock</button>
-                      <button type="button" onClick={() => askDelete(p.id, p.name)} className="bg-red-50 border border-red-200 text-red-600 px-2 py-1 rounded-lg text-xs font-bold hover:bg-red-100">🗑️ Delete</button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Renders the child table component safely without file limits */}
+      <StockTable products={products} askRestock={askRestock} askDelete={askDelete} />
     </div>
   );
 }
